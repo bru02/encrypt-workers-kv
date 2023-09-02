@@ -4,7 +4,8 @@ import {
   DecryptionError,
   EncryptionError,
 } from './errors'
-
+import type {KVNamespace, KVNamespaceGetOptions, KVNamespacePutOptions} from '@cloudflare/workers-types'
+ 
 const enc = new TextEncoder()
 const dec = new TextDecoder()
 
@@ -25,10 +26,7 @@ async function putEncryptedKV(
   data: string | ArrayBuffer,
   password: string,
   iterations: number = 10000,
-  options?: {
-    expiration?: string | number
-    expirationTtl?: string | number
-  },
+  options?: KVNamespacePutOptions,
 ): Promise<ArrayBuffer> {
   data = typeof data === 'string' ? enc.encode(data) : data
   let encryptedData
@@ -62,8 +60,11 @@ async function getDecryptedKV(
   namespace: KVNamespace,
   key: string,
   password: string,
+  options: Omit<KVNamespaceGetOptions<"arrayBuffer">, "type"> = {}
 ): Promise<ArrayBuffer> {
-  let kvEncryptedData = await namespace.get(key, 'arrayBuffer')
+  let _options = options as KVNamespaceGetOptions<"arrayBuffer">
+  _options.type = 'arrayBuffer'
+  let kvEncryptedData = await namespace.get(key, _options)
   if (kvEncryptedData === null) {
     throw new NotFoundError(`could not find ${key} in your namespace`)
   }
@@ -108,8 +109,11 @@ async function encryptData(
   try {
     const salt = crypto.getRandomValues(new Uint8Array(16))
     const iv = crypto.getRandomValues(new Uint8Array(12))
+    console.time('derivekey')
     const passwordKey = await getPasswordKey(password)
     const aesKey = await deriveKey(passwordKey, salt, ['encrypt'], iterations)
+    console.timeEnd('derivekey')
+
     const encryptedContent = await crypto.subtle.encrypt(
       {
         name: 'AES-GCM',
@@ -155,9 +159,11 @@ async function decryptData(
     const salt = new Uint8Array(encryptedDataBuff.slice(bytes, (bytes += 16)))
     const iv = new Uint8Array(encryptedDataBuff.slice(bytes, (bytes += 12)))
     const data = new Uint8Array(encryptedDataBuff.slice(bytes))
-
+    
+    console.time('derivekey')
     const passwordKey = await getPasswordKey(password)
     const aesKey = await deriveKey(passwordKey, salt, ['decrypt'], iterations)
+    console.timeEnd('derivekey')
     const decryptedContent = await crypto.subtle.decrypt(
       {
         name: 'AES-GCM',
@@ -172,4 +178,4 @@ async function decryptData(
   }
 }
 
-export { putEncryptedKV, getDecryptedKV }
+export { putEncryptedKV, getDecryptedKV, encryptData, decryptData }
