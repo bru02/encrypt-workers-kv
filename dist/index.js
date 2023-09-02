@@ -75,10 +75,8 @@ async function encryptData(secretData, password, iterations = 10000) {
     try {
         const salt = crypto.getRandomValues(new Uint8Array(16));
         const iv = crypto.getRandomValues(new Uint8Array(12));
-        console.time('derivekey');
         const passwordKey = await getPasswordKey(password);
         const aesKey = await deriveKey(passwordKey, salt, ['encrypt'], iterations);
-        console.timeEnd('derivekey');
         const encryptedContent = await crypto.subtle.encrypt({
             name: 'AES-GCM',
             iv: iv,
@@ -109,10 +107,8 @@ async function decryptData(encryptedData, password) {
         const salt = new Uint8Array(encryptedDataBuff.slice(bytes, (bytes += 16)));
         const iv = new Uint8Array(encryptedDataBuff.slice(bytes, (bytes += 12)));
         const data = new Uint8Array(encryptedDataBuff.slice(bytes));
-        console.time('derivekey');
         const passwordKey = await getPasswordKey(password);
         const aesKey = await deriveKey(passwordKey, salt, ['decrypt'], iterations);
-        console.timeEnd('derivekey');
         const decryptedContent = await crypto.subtle.decrypt({
             name: 'AES-GCM',
             iv: iv,
